@@ -769,7 +769,17 @@ function suggestOutfit(weather) {
 }
 
 function renderOutfit(weather) {
-  const { title, summary, items, tips } = suggestOutfit(weather);
+  let outfit;
+  try {
+    outfit = suggestOutfit(weather);
+  } catch (error) {
+    // The outfit is a nice-to-have; never let it break the rest of the forecast.
+    console.error("Couldn't build outfit suggestions", error);
+    $("outfit").hidden = true;
+    return;
+  }
+  const { title, summary, items, tips } = outfit;
+  $("outfit").hidden = false;
   $("outfit-title").textContent = title;
   $("outfit-summary").textContent = summary;
 
