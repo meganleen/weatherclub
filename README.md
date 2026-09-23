@@ -13,6 +13,7 @@ A simple static web page that looks up the current weather and a 7-day forecast 
 - "Use my location" button
 - °C / °F switch
 - Next 24 hours with a temperature curve, a 7-day forecast with temperature range bars, and details (feels like, humidity, wind direction, UV index, sunrise/sunset, pressure)
+- "What to wear" suggestions based on the temperature, rain or snow, wind, UV and how much it will warm up or cool down
 - Remembers your last city and unit
 - Works on phones and respects the "reduce motion" accessibility setting
 
