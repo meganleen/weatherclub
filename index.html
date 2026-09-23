@@ -3,48 +3,118 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Live weather and forecasts for any city, powered by Open-Meteo." />
+  <meta name="theme-color" content="#1f2b5c" />
   <title>Weather Club</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-  <main class="container">
-    <h1>Weather Club</h1>
-    <p class="subtitle">Check the weather in any city</p>
+<body data-sky="default" data-time="day">
+  <!-- Animated background: gradient sky, sun/moon, drifting clouds, rain/snow/stars, lightning -->
+  <div class="sky" aria-hidden="true">
+    <div class="celestial"></div>
+    <div class="clouds">
+      <span class="cloud c1"></span>
+      <span class="cloud c2"></span>
+      <span class="cloud c3"></span>
+      <span class="cloud c4"></span>
+    </div>
+    <canvas id="particles"></canvas>
+    <div class="flash"></div>
+  </div>
 
-    <form id="search-form" autocomplete="off">
+  <main class="app">
+    <header class="topbar">
+      <a class="brand" href="./">
+        <span class="brand-icon" id="brand-icon"></span>
+        <span>Weather Club</span>
+      </a>
+      <div class="controls">
+        <button id="locate-btn" class="icon-btn glass" type="button" aria-label="Use my location" title="Use my location">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+          </svg>
+        </button>
+        <div class="unit-toggle glass" role="group" aria-label="Temperature unit">
+          <button type="button" data-unit="celsius" aria-pressed="true">°C</button>
+          <button type="button" data-unit="fahrenheit" aria-pressed="false">°F</button>
+        </div>
+      </div>
+    </header>
+
+    <form id="search-form" class="search glass" autocomplete="off" role="search">
+      <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
       <input
         id="city-input"
         type="text"
-        placeholder="Enter a city, e.g. London"
+        placeholder="Search for a city…"
         aria-label="City name"
-        required
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded="false"
+        aria-controls="suggestions"
+        spellcheck="false"
       />
-      <button type="submit">Search</button>
+      <button type="submit" class="search-btn">Search</button>
+      <ul id="suggestions" class="suggestions" role="listbox" aria-label="Matching cities" hidden></ul>
     </form>
 
-    <p id="status" role="status" aria-live="polite"></p>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
 
-    <section id="current" class="card" hidden>
-      <h2 id="location"></h2>
-      <div class="current-main">
-        <span id="icon" class="icon" aria-hidden="true"></span>
-        <span id="temperature" class="temperature"></span>
+    <section id="welcome" class="welcome">
+      <h1>What's the sky doing?</h1>
+      <p>Search any city in the world, or jump straight to one of these:</p>
+      <div class="chips">
+        <button type="button" class="chip glass" data-city="London">London</button>
+        <button type="button" class="chip glass" data-city="Tokyo">Tokyo</button>
+        <button type="button" class="chip glass" data-city="New York">New York</button>
+        <button type="button" class="chip glass" data-city="Sydney">Sydney</button>
+        <button type="button" class="chip glass" data-city="Reykjavik">Reykjavík</button>
+        <button type="button" class="chip glass" data-city="Cape Town">Cape Town</button>
       </div>
-      <p id="description" class="description"></p>
-      <dl class="details">
-        <div><dt>Feels like</dt><dd id="feels-like"></dd></div>
-        <div><dt>Humidity</dt><dd id="humidity"></dd></div>
-        <div><dt>Wind</dt><dd id="wind"></dd></div>
-        <div><dt>Precipitation</dt><dd id="precipitation"></dd></div>
-      </dl>
     </section>
 
-    <section id="forecast" class="card" hidden>
-      <h3>7-day forecast</h3>
-      <ul id="forecast-list" class="forecast-list"></ul>
-    </section>
+    <div id="weather" class="weather" hidden>
+      <section class="hero">
+        <div class="hero-text">
+          <h1 id="location" class="location"></h1>
+          <p id="local-time" class="local-time"></p>
+          <p id="temperature" class="temperature"></p>
+          <p id="description" class="description"></p>
+          <p id="hi-lo" class="hi-lo"></p>
+        </div>
+        <div id="hero-icon" class="hero-icon"></div>
+      </section>
 
-    <footer>
+      <section class="card glass">
+        <h2 class="card-title">Next 24 hours</h2>
+        <div class="hourly-scroll">
+          <div id="hourly" class="hourly"></div>
+        </div>
+      </section>
+
+      <div class="grid">
+        <section class="card glass">
+          <h2 class="card-title">7-day forecast</h2>
+          <ul id="daily" class="daily"></ul>
+        </section>
+        <section class="card glass">
+          <h2 class="card-title">Right now</h2>
+          <div id="details" class="details"></div>
+        </section>
+      </div>
+    </div>
+
+    <footer class="footer">
       Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>
     </footer>
   </main>
