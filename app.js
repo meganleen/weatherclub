@@ -59,6 +59,8 @@ const state = {
   requestId: 0,
   suggestions: [],
   activeIndex: -1,
+  weather: null,
+  openDay: 0,
 };
 
 /* ---------- Helpers ---------- */
@@ -98,6 +100,17 @@ function formatHour(iso) {
 function weekday(date) {
   const [y, m, d] = date.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en", { weekday: "short", timeZone: "UTC" });
+}
+
+// "Thursday, Sep 24"
+function longDate(date) {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function cityNow(offsetSeconds) {
@@ -385,7 +398,8 @@ async function getWeather(latitude, longitude, unit) {
     longitude,
     current:
       "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m,pressure_msl,cloud_cover",
-    hourly: "temperature_2m,weather_code,precipitation_probability,is_day",
+    hourly:
+      "temperature_2m,apparent_temperature,weather_code,precipitation_probability,is_day,wind_speed_10m,uv_index,relative_humidity_2m",
     daily:
       "weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max",
     timezone: "auto",
@@ -548,7 +562,12 @@ function renderDaily(weather) {
   daily.time.forEach((date, i) => {
     const lo = daily.temperature_2m_min[i];
     const hi = daily.temperature_2m_max[i];
-    const row = el("li", "day");
+    const item = el("li");
+    const row = el("button", "day");
+    row.type = "button";
+    row.setAttribute("aria-label", `${i === 0 ? "Today" : longDate(date)}: see hour-by-hour outfit ideas`);
+    row.addEventListener("click", () => openDay(i));
+    item.append(row);
 
     row.append(el("span", "day-name", i === 0 ? "Today" : weekday(date)));
     const icon = el("span", "day-icon");
@@ -576,7 +595,10 @@ function renderDaily(weather) {
     }
     row.append(range);
     row.append(el("span", "day-max", deg(hi)));
-    list.append(row);
+    const chevron = el("span", "day-chevron", "›");
+    chevron.setAttribute("aria-hidden", "true");
+    row.append(chevron);
+    list.append(item);
   });
 }
 
@@ -649,61 +671,84 @@ function renderDetails(weather) {
 /* ---------- What to wear ---------- */
 
 // Outfits by how warm it feels (°C). The first entry whose `min` is at or below the feels-like temperature wins.
+// `short` is the one-line version used in the hour-by-hour list.
 const OUTFITS = [
   {
     min: 28,
     title: "Sundress weather",
+    short: "Sundress or linen shorts, sandals",
     items: [["👗", "Breezy sundress or linen shorts"], ["🩴", "Flat sandals"], ["👒", "Wide-brim hat"], ["🕶️", "Sunglasses"]],
   },
   {
     min: 22,
     title: "Light & breezy",
+    short: "Tee or cami, linen trousers or a midi skirt",
     items: [["👚", "Tee or silky camisole"], ["👖", "Linen trousers or a midi skirt"], ["👟", "White sneakers or sandals"], ["🕶️", "Sunglasses"]],
   },
   {
     min: 16,
     title: "Easy layers",
+    short: "Blouse or light knit, denim jacket or blazer",
     items: [["👚", "Blouse or light knit"], ["👖", "Jeans or wide-leg trousers"], ["🧥", "Denim jacket or blazer"], ["👟", "Loafers or sneakers"]],
   },
   {
     min: 10,
     title: "Jacket weather",
+    short: "Sweater, trench or leather jacket, ankle boots",
     items: [["🧶", "Fine-knit sweater"], ["🧥", "Trench coat or leather jacket"], ["👖", "Straight-leg jeans"], ["👢", "Ankle boots"]],
   },
   {
     min: 3,
     title: "Coat & knitwear",
+    short: "Wool coat, chunky knit, scarf",
     items: [["🧥", "Wool coat"], ["🧶", "Chunky knit sweater"], ["👖", "Trousers, or a skirt with warm tights"], ["👢", "Leather ankle boots"], ["🧣", "Scarf"]],
   },
   {
     min: -Infinity,
     title: "Bundle up",
+    short: "Puffer, thermals, hat, scarf & gloves",
     items: [["🧥", "Long puffer coat"], ["🧶", "Thermal layer under a cosy knit"], ["🧣", "Scarf & beanie"], ["🧤", "Gloves"], ["🥾", "Insulated boots"]],
   },
 ];
 
 const SHOES = ["🩴", "👟", "👢", "🥾"];
+const WET = ["rain", "drizzle", "storm"];
 
-function suggestOutfit(weather) {
-  const { current, hourly, daily } = weather;
+function toCelsius(t) {
+  return state.unit === "fahrenheit" ? ((t - 32) * 5) / 9 : t;
+}
+
+function toKmh(speed) {
+  return state.unit === "fahrenheit" ? speed * 1.609 : speed;
+}
+
+function outfitIndex(feelsC) {
+  return OUTFITS.findIndex((outfit) => feelsC >= outfit.min);
+}
+
+function hourFeels(hourly, i) {
+  return hourly.apparent_temperature?.[i] ?? hourly.temperature_2m[i];
+}
+
+function average(values) {
+  return values.reduce((sum, v) => sum + v, 0) / (values.length || 1);
+}
+
+// Outfit and tips for a stretch of hours. `feels`, `windSpeed` are in the display unit.
+function buildOutfit(weather, { hours, codes, feels, wet, windSpeed, uv, humidity, daytime, lead, window }) {
+  const { hourly } = weather;
   const fahrenheit = state.unit === "fahrenheit";
-  const toC = (t) => (fahrenheit ? ((t - 32) * 5) / 9 : t);
-  const windKmh = fahrenheit ? current.wind_speed_10m * 1.609 : current.wind_speed_10m;
+  const feelsC = toCelsius(feels);
+  const windKmh = toKmh(windSpeed);
+  const temps = hours.map((i) => hourly.temperature_2m[i]);
+  const rainChance = Math.max(0, ...hours.map((i) => hourly.precipitation_probability?.[i] ?? 0));
+  const conditions = codes.map(conditionFor);
+  const snowy = conditions.includes("snow");
+  const stormy = conditions.includes("storm");
+  const rainy = wet || rainChance >= 50;
 
-  const next = upcomingHours(weather, 12);
-  const feels = toC(current.apparent_temperature);
-  const temps = next.map((i) => hourly.temperature_2m[i]);
-  const rainChance = Math.max(0, ...next.map((i) => hourly.precipitation_probability?.[i] ?? 0));
-  const conditionsAhead = [current.weather_code, ...next.map((i) => hourly.weather_code[i])].map(conditionFor);
-  const wetNow = ["rain", "drizzle", "storm"].includes(conditionFor(current.weather_code));
-  const snowy = conditionsAhead.includes("snow");
-  const stormy = conditionsAhead.includes("storm");
-  const rainy = wetNow || rainChance >= 50;
-  const uv = daily.uv_index_max?.[0] ?? 0;
-  const daytime = current.is_day === 1;
-
-  const outfit = OUTFITS.find((o) => feels >= o.min);
-  const cool = feels < 22;
+  const outfit = OUTFITS[outfitIndex(feelsC)];
+  const cool = feelsC < 22;
   let items = outfit.items.map(([emoji, label]) => ({ emoji, label }));
   const replaceShoes = (emoji, label) => {
     const shoe = items.find((item) => SHOES.includes(item.emoji));
@@ -724,67 +769,136 @@ function suggestOutfit(weather) {
         : { emoji: "☂️", label: "Umbrella" }
     );
   }
-  if (wetNow) {
+  if (wet) {
     items = items.filter((item) => item.emoji !== "🕶️");
   } else if (uv >= 3 && daytime && !items.some((item) => item.emoji === "🕶️")) {
     items.push({ emoji: "🕶️", label: "Sunglasses" });
   }
 
-  // Tips about the day ahead.
   const tips = [];
   if (stormy) tips.push(["⛈️", "Thunderstorms are possible, so keep outdoor plans flexible."]);
-  if (snowy) tips.push(["❄️", `${rainChance}% chance of snow in the next 12 hours. Watch out for slippery pavements.`]);
-  else if (rainy) tips.push(["☔", `${rainChance}% chance of rain in the next 12 hours. Leave suede and canvas shoes at home.`]);
-  else if (rainChance >= 30) tips.push(["🌂", `${rainChance}% chance of rain later. A compact umbrella in your bag wouldn't hurt.`]);
+  if (snowy) tips.push(["❄️", `${rainChance}% chance of snow ${window}. Watch out for slippery pavements.`]);
+  else if (rainy) tips.push(["☔", `${rainChance}% chance of rain ${window}. Leave suede and canvas shoes at home.`]);
+  else if (rainChance >= 30) tips.push(["🌂", `${rainChance}% chance of rain ${window}. A compact umbrella in your bag wouldn't hurt.`]);
 
-  const peak = temps.indexOf(Math.max(...temps));
-  const low = temps.indexOf(Math.min(...temps));
-  const swing = toC(temps[peak]) - toC(temps[low]);
-  const warming = peak > low;
-  const target = warming ? peak : low;
-  // Only worth mentioning if it changes what you'd wear: shedding layers, or needing one later.
-  if (swing >= 7 && (warming || toC(temps[target]) < 20)) {
-    tips.push([
-      "🌡️",
-      warming
-        ? `Warming up to ${deg(temps[target])} by ${formatHour(hourly.time[next[target]])}, so wear layers you can take off.`
-        : `Cooling to ${deg(temps[target])} by ${formatHour(hourly.time[next[target]])}, so bring an extra layer for later.`,
-    ]);
+  if (temps.length > 1) {
+    const peak = temps.indexOf(Math.max(...temps));
+    const low = temps.indexOf(Math.min(...temps));
+    const swing = toCelsius(temps[peak]) - toCelsius(temps[low]);
+    const warming = peak > low;
+    const target = warming ? peak : low;
+    // Only worth mentioning if it changes what you'd wear: shedding layers, or needing one later.
+    if (swing >= 7 && (warming || toCelsius(temps[target]) < 20)) {
+      const when = formatHour(hourly.time[hours[target]]);
+      tips.push([
+        "🌡️",
+        warming
+          ? `Warming up to ${deg(temps[target])} by ${when}, so wear layers you can take off.`
+          : `Cooling to ${deg(temps[target])} by ${when}, so bring an extra layer for later.`,
+      ]);
+    }
   }
 
   if (windKmh >= 30) {
-    tips.push(["💨", `Windy (${Math.round(current.wind_speed_10m)} ${fahrenheit ? "mph" : "km/h"}). Fitted pieces or trousers beat anything flowy today.`]);
+    tips.push(["💨", `Windy (up to ${Math.round(windSpeed)} ${fahrenheit ? "mph" : "km/h"}). Fitted pieces or trousers beat anything flowy.`]);
   }
   if (uv >= 6) tips.push(["🧴", `UV is high (${Math.round(uv)}). Wear SPF 50 and reapply if you're outside for long.`]);
   else if (uv >= 3) tips.push(["🧴", `Moderate UV (${Math.round(uv)}). SPF 30 on your face is a good idea.`]);
-  if (current.relative_humidity_2m >= 75 && feels >= 22) {
-    tips.push(["💧", "It's humid, so breathable linen or cotton will feel best."]);
-  }
+  if (humidity >= 75 && feelsC >= 22) tips.push(["💧", "It's humid, so breathable linen or cotton will feel best."]);
   if (tips.length === 0) tips.push(["✨", "No surprises in the forecast. Dress for comfort and enjoy it."]);
 
-  const summary = [`Feels like ${deg(current.apparent_temperature)} right now`];
+  const summary = [lead];
   if (rainChance >= 30) summary.push(`${rainChance}% chance of ${snowy ? "snow" : "rain"}`);
 
   return { title: outfit.title, summary: summary.join(" · "), items, tips };
 }
 
-function renderOutfit(weather) {
-  let outfit;
-  try {
-    outfit = suggestOutfit(weather);
-  } catch (error) {
-    // The outfit is a nice-to-have; never let it break the rest of the forecast.
-    console.error("Couldn't build outfit suggestions", error);
-    $("outfit").hidden = true;
-    return;
-  }
-  const { title, summary, items, tips } = outfit;
-  $("outfit").hidden = false;
-  $("outfit-title").textContent = title;
-  $("outfit-summary").textContent = summary;
+// What to wear right now, looking 12 hours ahead.
+function suggestOutfit(weather) {
+  const { current, hourly, daily } = weather;
+  const hours = upcomingHours(weather, 12);
+  return buildOutfit(weather, {
+    hours,
+    codes: [current.weather_code, ...hours.map((i) => hourly.weather_code[i])],
+    feels: current.apparent_temperature,
+    wet: WET.includes(conditionFor(current.weather_code)),
+    windSpeed: current.wind_speed_10m,
+    uv: daily.uv_index_max?.[0] ?? 0,
+    humidity: current.relative_humidity_2m,
+    daytime: current.is_day === 1,
+    lead: `Feels like ${deg(current.apparent_temperature)} right now`,
+    window: "in the next 12 hours",
+  });
+}
 
-  $("outfit-items").replaceChildren(
-    ...items.map(({ emoji, label }) => {
+// Hourly indices for one forecast day (today starts from the current hour).
+function dayHours(weather, dayIndex) {
+  const { hourly, daily } = weather;
+  if (dayIndex === 0) {
+    return upcomingHours(weather, 24).filter((i) => hourly.time[i].startsWith(daily.time[0]));
+  }
+  return hourly.time.flatMap((t, i) => (t.startsWith(daily.time[dayIndex]) ? [i] : []));
+}
+
+// What to wear for a whole day, based on waking hours (7 AM – 10 PM).
+function suggestDayOutfit(weather, dayIndex) {
+  const { hourly, daily } = weather;
+  const all = dayHours(weather, dayIndex);
+  const waking = all.filter((i) => {
+    const hour = Number(hourly.time[i].slice(11, 13));
+    return hour >= 7 && hour <= 21;
+  });
+  const hours = waking.length ? waking : all;
+  const feels = average(hours.map((i) => hourFeels(hourly, i)));
+  const wetHours = hours.filter((i) => WET.includes(conditionFor(hourly.weather_code[i]))).length;
+
+  return buildOutfit(weather, {
+    hours,
+    codes: hours.map((i) => hourly.weather_code[i]),
+    feels,
+    wet: wetHours >= hours.length / 2,
+    windSpeed: Math.max(0, ...hours.map((i) => hourly.wind_speed_10m?.[i] ?? 0)),
+    uv: daily.uv_index_max?.[dayIndex] ?? 0,
+    humidity: average(hours.map((i) => hourly.relative_humidity_2m?.[i] ?? 50)),
+    daytime: true,
+    lead: `Feels like about ${deg(feels)} ${dayIndex === 0 ? "for the rest of the day" : "during the day"}`,
+    window: dayIndex === 0 ? "for the rest of today" : `on ${longDate(daily.time[dayIndex]).split(",")[0]}`,
+  });
+}
+
+// One-line outfit for a single hour, plus any extras (umbrella, sunglasses…).
+function hourOutfit(weather, i) {
+  const { hourly } = weather;
+  const band = outfitIndex(toCelsius(hourFeels(hourly, i)));
+  const condition = conditionFor(hourly.weather_code[i]);
+  const pop = hourly.precipitation_probability?.[i] ?? 0;
+  const windKmh = toKmh(hourly.wind_speed_10m?.[i] ?? 0);
+  const uv = hourly.uv_index?.[i] ?? 0;
+  const wet = WET.includes(condition) || pop >= 50;
+  const extras = [];
+
+  if (condition === "snow") {
+    extras.push(["🥾", "Snow boots"]);
+    if (band < OUTFITS.length - 1) extras.push(["🧤", "Gloves"]);
+  } else if (wet) {
+    extras.push(windKmh >= 40 ? ["🧥", "Hooded rain jacket"] : ["☂️", "Umbrella"]);
+  } else if (pop >= 30) {
+    extras.push(["🌂", "Umbrella handy"]);
+  }
+  if (!wet && hourly.is_day?.[i] === 1 && uv >= 3) {
+    extras.push(["🕶️", "Sunglasses"]);
+    if (uv >= 6) extras.push(["🧴", "SPF 50"]);
+  }
+  if (windKmh >= 30) extras.push(["💨", "Windy"]);
+
+  return { band, text: OUTFITS[band].short, extras };
+}
+
+function fillOutfit(ids, outfit) {
+  $(ids.title).textContent = outfit.title;
+  $(ids.summary).textContent = outfit.summary;
+  $(ids.items).replaceChildren(
+    ...outfit.items.map(({ emoji, label }) => {
       const item = el("li");
       const icon = el("span", "outfit-emoji", emoji);
       icon.setAttribute("aria-hidden", "true");
@@ -792,9 +906,8 @@ function renderOutfit(weather) {
       return item;
     })
   );
-
-  $("outfit-tips").replaceChildren(
-    ...tips.map(([emoji, text]) => {
+  $(ids.tips).replaceChildren(
+    ...outfit.tips.map(([emoji, text]) => {
       const item = el("li");
       const icon = el("span", "tip-emoji", emoji);
       icon.setAttribute("aria-hidden", "true");
@@ -804,13 +917,144 @@ function renderOutfit(weather) {
   );
 }
 
+function renderOutfit(weather) {
+  try {
+    fillOutfit({ title: "outfit-title", summary: "outfit-summary", items: "outfit-items", tips: "outfit-tips" }, suggestOutfit(weather));
+    $("outfit").hidden = false;
+  } catch (error) {
+    // The outfit is a nice-to-have; never let it break the rest of the forecast.
+    console.error("Couldn't build outfit suggestions", error);
+    $("outfit").hidden = true;
+  }
+}
+
+/* ---------- Day detail (hour-by-hour outfits) ---------- */
+
+const dayDialog = $("day-dialog");
+
+function openDay(index) {
+  if (!state.weather) return;
+  state.openDay = Math.min(Math.max(index, 0), state.weather.daily.time.length - 1);
+  dayDialog.classList.remove("show-night");
+  renderDay();
+  if (!dayDialog.open) dayDialog.showModal();
+}
+
+function renderDay() {
+  const weather = state.weather;
+  const index = state.openDay;
+  const { daily, hourly } = weather;
+  const date = daily.time[index];
+
+  $("day-title").textContent = index === 0 ? `Today, ${longDate(date).split(", ")[1]}` : longDate(date);
+  const pop = daily.precipitation_probability_max?.[index] ?? 0;
+  $("day-sub").textContent = [
+    labelFor(daily.weather_code[index]),
+    `H ${deg(daily.temperature_2m_max[index])} · L ${deg(daily.temperature_2m_min[index])}`,
+    pop >= 10 ? `${pop}% chance of ${conditionFor(daily.weather_code[index]) === "snow" ? "snow" : "rain"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  $("day-icon").innerHTML = iconSvg(daily.weather_code[index], true);
+  $("day-prev").disabled = index === 0;
+  $("day-next").disabled = index === daily.time.length - 1;
+
+  try {
+    fillOutfit(
+      { title: "day-outfit-title", summary: "day-outfit-summary", items: "day-outfit-items", tips: "day-outfit-tips" },
+      suggestDayOutfit(weather, index)
+    );
+    $("day-outfit").hidden = false;
+  } catch (error) {
+    console.error("Couldn't build the day's outfit", error);
+    $("day-outfit").hidden = true;
+  }
+
+  const list = $("day-hours");
+  list.replaceChildren();
+  const hours = dayHours(weather, index);
+  const outfits = hours.map((i) => hourOutfit(weather, i));
+  let previousBand = null;
+  let hasNight = false;
+
+  hours.forEach((i, n) => {
+    const hour = Number(hourly.time[i].slice(11, 13));
+    const night = hour < 6;
+    hasNight ||= night;
+    const outfit = outfits[n];
+
+    // Call out the moments you'd change what you're wearing, ignoring one-hour blips.
+    const lasts = n === hours.length - 1 || outfits[n + 1].band === outfit.band;
+    if (previousBand !== null && outfit.band !== previousBand && lasts) {
+      const colder = outfit.band > previousBand;
+      const note = el(
+        "li",
+        `layer-change${night ? " night" : ""}`,
+        colder
+          ? `🧥 Getting colder from ${formatHour(hourly.time[i])}: add a layer`
+          : `☀️ Warming up from ${formatHour(hourly.time[i])}: you can lose a layer`
+      );
+      list.append(note);
+    }
+    if (previousBand === null || lasts) previousBand = outfit.band;
+
+    const row = el("li", `hour-row${night ? " night" : ""}`);
+    row.append(el("span", "hr-time", index === 0 && n === 0 ? "Now" : formatHour(hourly.time[i])));
+    const icon = el("span", "hr-icon");
+    icon.innerHTML = iconSvg(hourly.weather_code[i], hourly.is_day?.[i] !== 0);
+    icon.title = labelFor(hourly.weather_code[i]);
+    row.append(icon);
+
+    const temp = el("span", "hr-temp");
+    temp.append(el("strong", "", deg(hourly.temperature_2m[i])));
+    temp.append(el("small", "", `feels ${deg(hourFeels(hourly, i))}`));
+    row.append(temp);
+
+    const hourPop = hourly.precipitation_probability?.[i] ?? 0;
+    row.append(el("span", "hr-pop", hourPop >= 10 ? `${hourPop}%` : ""));
+
+    const wear = el("div", "hr-outfit");
+    wear.append(el("span", "hr-text", outfit.text));
+    if (outfit.extras.length) {
+      const extras = el("span", "hr-extras");
+      for (const [emoji, label] of outfit.extras) extras.append(el("span", "mini-chip", `${emoji} ${label}`));
+      wear.append(extras);
+    }
+    row.append(wear);
+    list.append(row);
+  });
+
+  const toggle = $("night-toggle");
+  toggle.hidden = !hasNight;
+  toggle.textContent = dayDialog.classList.contains("show-night") ? "Hide night hours" : "Show night hours";
+  $("day-sheet").scrollTop = 0;
+}
+
+dayDialog.addEventListener("click", (event) => {
+  if (event.target === dayDialog) dayDialog.close(); // clicked the backdrop
+});
+dayDialog.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowLeft" && state.openDay > 0) openDay(state.openDay - 1);
+  if (event.key === "ArrowRight" && state.openDay < state.weather.daily.time.length - 1) openDay(state.openDay + 1);
+});
+$("day-close").addEventListener("click", () => dayDialog.close());
+$("day-prev").addEventListener("click", () => openDay(state.openDay - 1));
+$("day-next").addEventListener("click", () => openDay(state.openDay + 1));
+$("night-toggle").addEventListener("click", () => {
+  const showing = dayDialog.classList.toggle("show-night");
+  $("night-toggle").textContent = showing ? "Hide night hours" : "Show night hours";
+});
+$("outfit-hourly").addEventListener("click", () => openDay(0));
+
 function render(place, weather) {
+  state.weather = weather;
   applySky(weather.current.weather_code, weather.current.is_day === 1);
   renderHero(place, weather);
   renderHourly(weather);
   renderDaily(weather);
   renderDetails(weather);
   renderOutfit(weather);
+  if (dayDialog.open) renderDay();
   welcomeEl.hidden = true;
   weatherEl.hidden = false;
 }

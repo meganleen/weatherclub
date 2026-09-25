@@ -651,17 +651,46 @@ body[data-time="night"] .celestial {
   padding: 0;
 }
 
-.day {
-  display: grid;
-  grid-template-columns: 3.4em 34px 2.8em 2.4em 1fr 2.4em;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+.daily li + li {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.day:first-child {
-  border-top: none;
+/* Each day is a button that opens the hour-by-hour panel. */
+.day {
+  display: grid;
+  grid-template-columns: 3.4em 34px 2.8em 2.4em 1fr 2.4em 10px;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.day:hover {
+  background: var(--glass-hover);
+}
+
+.day-chevron {
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.day:hover .day-chevron {
+  transform: translateX(2px);
+  color: var(--text);
+}
+
+.title-hint {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 400;
 }
 
 .day-name {
@@ -890,6 +919,299 @@ body[data-time="night"] .celestial {
   flex: none;
 }
 
+.more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1b2340;
+  font-weight: 600;
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+
+.more-btn:hover {
+  background: #fff;
+}
+
+.more-btn:hover span {
+  transform: translateX(2px);
+}
+
+.more-btn span {
+  transition: transform 0.15s ease;
+}
+
+/* ---------- Day detail panel ---------- */
+.day-dialog {
+  width: min(780px, calc(100% - 32px));
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  overflow: visible;
+}
+
+.day-dialog::backdrop {
+  background: rgba(5, 8, 20, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.sheet {
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 20px 24px;
+  border-radius: 26px;
+  border: 1px solid var(--glass-border);
+  /* Tinted with the current sky, darkened so white text always reads well. */
+  background: rgba(16, 24, 48, 0.95);
+  background: linear-gradient(170deg, color-mix(in srgb, var(--sky-top) 60%, #0b1020), color-mix(in srgb, var(--sky-bottom) 50%, #0b1020));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  animation: sheet-in 0.25s ease-out;
+}
+
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.sheet-head .icon-btn {
+  flex: none;
+}
+
+.sheet-head .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.sheet-heading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sheet-icon {
+  flex: none;
+  width: 54px;
+  height: 54px;
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 500;
+}
+
+.sheet-sub {
+  margin: 2px 0 0;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
+.sheet-section + .sheet-section {
+  margin-top: 22px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.link-btn {
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link-btn:hover {
+  color: var(--text);
+}
+
+.hour-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hour-row {
+  display: grid;
+  grid-template-columns: 3.6em 34px 4.6em 2.8em 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hour-list > :first-child {
+  border-top: none;
+}
+
+.hour-list .night {
+  display: none;
+}
+
+.show-night .hour-list .night {
+  display: grid;
+}
+
+.show-night .hour-list .layer-change.night {
+  display: block;
+}
+
+.hr-time {
+  font-weight: 500;
+}
+
+.hr-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.hr-temp {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.hr-temp strong {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.hr-temp small {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.hr-pop {
+  font-size: 0.8rem;
+  color: #a9dcff;
+}
+
+.hr-outfit {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.hr-text {
+  line-height: 1.3;
+}
+
+.hr-extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mini-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.layer-change {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 214, 107, 0.16);
+  border: 1px solid rgba(255, 214, 107, 0.35);
+  font-size: 0.88rem;
+}
+
+.layer-change + .hour-row {
+  border-top: none;
+}
+
+@media (max-width: 600px) {
+  .day-dialog {
+    width: 100%;
+    margin: auto 0 0;
+  }
+
+  .sheet {
+    max-height: 92dvh;
+    padding: 16px 16px 28px;
+    border-radius: 24px 24px 0 0;
+    border-bottom: none;
+  }
+
+  .sheet-head {
+    flex-wrap: wrap;
+  }
+
+  .sheet-heading {
+    order: -1;
+    flex-basis: 100%;
+    margin-bottom: 6px;
+  }
+
+  #day-close {
+    margin-left: auto;
+  }
+
+  .sheet-title {
+    font-size: 1.2rem;
+  }
+
+  .outfit-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .outfit-items li {
+    gap: 8px;
+    padding: 8px 10px 8px 8px;
+    font-size: 0.92rem;
+  }
+
+  .outfit-emoji {
+    width: 34px;
+    height: 34px;
+    font-size: 1.15rem;
+  }
+
+  /* Outfit text drops onto its own line under the numbers. */
+  .hour-row {
+    grid-template-columns: 3.4em 30px 4.4em 1fr;
+    row-gap: 6px;
+  }
+
+  .hr-pop {
+    text-align: right;
+  }
+
+  .hr-outfit {
+    grid-column: 2 / -1;
+  }
+}
+
 /* ---------- Animated weather icons ---------- */
 .wx {
   display: block;
@@ -1017,7 +1339,7 @@ body[data-time="night"] .celestial {
   }
 
   .day {
-    grid-template-columns: 3em 30px 2.6em 2.2em 1fr 2.2em;
+    grid-template-columns: 3em 30px 2.6em 2.2em 1fr 2.2em 8px;
     gap: 6px;
   }
 

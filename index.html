@@ -12,7 +12,7 @@
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="style.css?v=202609231458" />
+  <link rel="stylesheet" href="style.css?v=202609251151" />
 </head>
 <body data-sky="default" data-time="day">
   <!-- Animated background: gradient sky, sun/moon, drifting clouds, rain/snow/stars, lightning -->
@@ -104,7 +104,7 @@
 
       <div class="grid">
         <section class="card glass">
-          <h2 class="card-title">7-day forecast</h2>
+          <h2 class="card-title">7-day forecast <span class="title-hint">· tap a day for outfits</span></h2>
           <ul id="daily" class="daily"></ul>
         </section>
         <section class="card glass">
@@ -121,6 +121,7 @@
         </div>
         <ul id="outfit-items" class="outfit-items"></ul>
         <ul id="outfit-tips" class="outfit-tips"></ul>
+        <button id="outfit-hourly" type="button" class="more-btn">See what to wear hour by hour <span aria-hidden="true">→</span></button>
       </section>
     </div>
 
@@ -129,6 +130,48 @@
     </footer>
   </main>
 
-  <script src="app.js?v=202609231458"></script>
+  <!-- Day detail: that day's outfit and hour-by-hour suggestions -->
+  <dialog id="day-dialog" class="day-dialog" aria-labelledby="day-title">
+    <div id="day-sheet" class="sheet">
+      <header class="sheet-head">
+        <button id="day-prev" type="button" class="icon-btn glass" aria-label="Previous day">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <div class="sheet-heading">
+          <span id="day-icon" class="sheet-icon"></span>
+          <div>
+            <h2 id="day-title" class="sheet-title"></h2>
+            <p id="day-sub" class="sheet-sub"></p>
+          </div>
+        </div>
+        <button id="day-next" type="button" class="icon-btn glass" aria-label="Next day">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+        <button id="day-close" type="button" class="icon-btn glass" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </header>
+
+      <section id="day-outfit" class="sheet-section">
+        <h3 class="card-title">What to wear</h3>
+        <div class="outfit-head">
+          <p id="day-outfit-title" class="outfit-title"></p>
+          <p id="day-outfit-summary" class="outfit-summary"></p>
+        </div>
+        <ul id="day-outfit-items" class="outfit-items"></ul>
+        <ul id="day-outfit-tips" class="outfit-tips"></ul>
+      </section>
+
+      <section class="sheet-section">
+        <div class="section-head">
+          <h3 class="card-title">Hour by hour</h3>
+          <button id="night-toggle" type="button" class="link-btn">Show night hours</button>
+        </div>
+        <ol id="day-hours" class="hour-list"></ol>
+      </section>
+    </div>
+  </dialog>
+
+  <script src="app.js?v=202609251151"></script>
 </body>
 </html>
